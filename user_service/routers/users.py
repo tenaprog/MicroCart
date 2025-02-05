@@ -1,16 +1,23 @@
-from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-
+from fastapi import APIRouter, HTTPException, Depends
 from models.userResponse import UserResponse
 from models.userUpdate import UserUpdate
-
+from auth import get_current_user, check_permission
 from db_util import get_user_by_id, update_user, delete_user, list_users
 
 router = APIRouter()
 
 
+@router.get("/users", response_model=List[UserResponse])
+def list_users_data():
+    # to-do: add isAdmin check
+    users = list_users()
+    return users
+
+
 @router.get("/users/{user_id}", response_model=UserResponse)
-def get_user_profile(user_id: str):
+def get_user_profile(user_id: str, current_user: dict = Depends(get_current_user)):
+    check_permission(current_user, user_id)
     user = get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -18,7 +25,9 @@ def get_user_profile(user_id: str):
 
 
 @router.put("/users/{user_id}", response_model=UserResponse)
-def update_user_data(user_id: str, user: UserUpdate):
+def update_user_data(user_id: str, user: UserUpdate, current_user: dict = Depends(get_current_user)):
+    check_permission(current_user, user_id)
+
     update_expression = []
     expression_attribute_values = {}
 
@@ -37,12 +46,7 @@ def update_user_data(user_id: str, user: UserUpdate):
 
 
 @router.delete("/users/{user_id}", status_code=204)
-def delete_user_data(user_id: str):
+def delete_user_data(user_id: str, current_user: dict = Depends(get_current_user)):
+    check_permission(current_user, user_id)
     delete_user(user_id)
     return {}
-
-
-@router.get("/users", response_model=List[UserResponse])
-def list_users_data():
-    users = list_users()
-    return users
