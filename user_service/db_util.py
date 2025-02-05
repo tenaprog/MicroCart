@@ -1,12 +1,11 @@
 import boto3
 import os
-from config import AWS_REGION, DYNAMODB_TABLE_NAME
 
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "your_access_key_id")
-AWS_SECRET_ACCESS_KEY = os.getenv(
-    "AWS_SECRET_ACCESS_KEY", "your_secret_access_key")
-DYNAMODB_ENDPOINT_URL = os.getenv(
-    "DYNAMODB_ENDPOINT_URL", "http://host.docker.internal:8000")
+DYNAMODB_TABLE_NAME = os.getenv("DYNAMODB_TABLE_NAME")
+DYNAMODB_ENDPOINT_URL = os.getenv("DYNAMODB_ENDPOINT_URL")
+AWS_REGION = os.getenv("AWS_REGION")
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
 dynamodb = boto3.resource(
     'dynamodb',
@@ -20,7 +19,6 @@ table = dynamodb.Table(DYNAMODB_TABLE_NAME)
 
 
 def create_user(user_data: dict):
-    """Create a new user."""
     try:
         table.put_item(Item=user_data)
     except Exception as e:
@@ -29,7 +27,6 @@ def create_user(user_data: dict):
 
 
 def get_user_by_email(email: str):
-    """Retrieve user by email."""
     try:
         response = table.scan(
             FilterExpression="email = :email",
