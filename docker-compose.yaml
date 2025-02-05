@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  user_service:
+    build: ./user_service
+    ports:
+      - "8001:8000"
+    environment:
+      - ENV=production
+      - DYNAMODB_URL=http://dynamodb:8000
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      - dynamodb
+
+  cart_service:
+    build: ./cart_service
+    ports:
+      - "8003:8000"
+    environment:
+      - ENV=production
+      - DYNAMODB_URL=http://dynamodb:8000
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      - dynamodb
+
+  product_service:
+    build: ./product_service
+    ports:
+      - "8002:8000"
+    environment:
+      - ENV=production
+      - DYNAMODB_URL=http://dynamodb:8000
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+      - AWS_DEFAULT_REGION=us-east-1
+    depends_on:
+      - dynamodb
+
+  dynamodb:
+    image: amazon/dynamodb-local
+    container_name: dynamodb
+    ports:
+      - "8000:8000"
+    command: [ "-jar", "DynamoDBLocal.jar", "-sharedDb" ]
+    volumes:
+      - dynamodb_data:/home/dynamodblocal
+
+volumes:
+  dynamodb_data:
