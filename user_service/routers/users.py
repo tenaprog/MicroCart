@@ -2,15 +2,15 @@ from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 from models.userResponse import UserResponse
 from models.userUpdate import UserUpdate
-from auth import get_current_user, check_permission
+from auth import get_current_user, check_permission, check_admin
 from db_util import get_user_by_id, update_user, delete_user, list_users
 
 router = APIRouter()
 
 
 @router.get("/users", response_model=List[UserResponse])
-def list_users_data():
-    # to-do: add isAdmin check
+def list_users_data(current_user: dict = Depends(get_current_user)):
+    check_admin(current_user)
     users = list_users()
     return users
 

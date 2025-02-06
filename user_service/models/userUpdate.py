@@ -8,3 +8,4 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     date_of_birth: Optional[str] = None
     gender: Optional[str] = None
+    is_admin: Optional[bool] = None

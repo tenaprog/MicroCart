@@ -1,6 +1,5 @@
 import os
-from http.client import HTTPException
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
@@ -23,19 +22,15 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    to_encode = data.copy()
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+def create_access_token(user_id: str, is_admin: bool, expires_delta: Optional[timedelta] = None) -> str:
+    expire = datetime.utcnow() + \
+        (expires_delta if expires_delta else timedelta(
+            minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode = {"sub": user_id, "is_admin": is_admin, "exp": expire}
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def verify_access_token(token: str) -> dict:
+def verify_access_token(token: str) -> Optional[dict]:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
@@ -43,15 +38,22 @@ def verify_access_token(token: str) -> dict:
         return None
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
     user_data = verify_access_token(token)
-    if user_data is None:
+    if not user_data:
         raise HTTPException(
-            status_code=401, detail="Invalid authentication credentials"
-        )
+            status_code=401, detail="Invalid authentication credentials")
     return user_data
 
 
-def check_permission(current_user, user_id: str):
+def check_permission(current_user: dict, user_id: str):
+    if current_user.get("is_admin", True):
+        return
     if current_user["sub"] != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+
+
+def check_admin(current_user: dict):
+    if not current_user.get("is_admin", False):
+        raise HTTPException(
+            status_code=403, detail="Admin check failed: Missing 'is_admin' field")
