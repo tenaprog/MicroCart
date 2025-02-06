@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends
-
 from fastapi.security import OAuth2PasswordBearer
 
 from utils.db import add_to_cart, clear_cart, create_cart, get_cart, remove_from_cart
+from utils.verify_user import verify_token_from_user_service
+
 from models.cart import Cart
 from models.cartItem import CartItem
-from utils.auth import verify_token_from_user_service
 
 
 router = APIRouter()

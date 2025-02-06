@@ -7,7 +7,7 @@ from models.productResponse import ProductResponse
 from models.productUpdate import ProductUpdate
 
 from utils.db import create_product, get_product_by_id, get_all_products, update_product, delete_product
-from utils.auth import verify_token_from_user_service
+from utils.verify_user import verify_token_from_user_service
 
 router = APIRouter()
 
