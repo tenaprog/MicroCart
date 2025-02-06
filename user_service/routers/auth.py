@@ -13,7 +13,6 @@ router = APIRouter()
 
 @router.post("/register", response_model=UserResponse)
 def register_user_route(user: UserCreate):
-    """Registers a new user."""
     existing_user = get_user_by_email(user.email)
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")

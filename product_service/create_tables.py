@@ -8,10 +8,10 @@ dynamodb = boto3.resource(
     aws_secret_access_key="dummy",
 )
 
-table_name = "users"
+table_name = "products"
 
 
-def create_user_table():
+def create_product_table():
     existing_tables = dynamodb.meta.client.list_tables()["TableNames"]
 
     if table_name in existing_tables:
@@ -22,14 +22,14 @@ def create_user_table():
 
     table = dynamodb.create_table(
         TableName=table_name,
-        KeySchema=[{"AttributeName": "user_id", "KeyType": "HASH"}],
+        KeySchema=[{"AttributeName": "product_id", "KeyType": "HASH"}],
         AttributeDefinitions=[
-            {"AttributeName": "user_id", "AttributeType": "S"}
+            {"AttributeName": "product_id", "AttributeType": "S"}
         ],
         ProvisionedThroughput={
             "ReadCapacityUnits": 5,
             "WriteCapacityUnits": 5
-        },
+        }
     )
 
     table.wait_until_exists()
@@ -37,4 +37,4 @@ def create_user_table():
 
 
 if __name__ == "__main__":
-    create_user_table()
+    create_product_table()

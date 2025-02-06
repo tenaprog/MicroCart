@@ -1,8 +1,6 @@
 from fastapi import FastAPI
+from routers import products
 
 app = FastAPI()
 
-
-@app.get("/")
-def read_root():
-    return {"message": "Product service works!"}
+app.include_router(products.router)
