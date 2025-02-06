@@ -1,8 +1,6 @@
 from fastapi import FastAPI
+from routers import cart
 
 app = FastAPI()
 
-
-@app.get("/")
-def read_root():
-    return {"message": "Cart service works!"}
+app.include_router(cart.router)
