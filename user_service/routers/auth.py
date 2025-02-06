@@ -1,14 +1,16 @@
+import json
 import uuid
+from typing import Dict
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 
 from models.userCreate import UserCreate
 from models.userResponse import UserResponse
-
-from db_util import create_user, get_user_by_email
-from auth import hash_password, verify_password, create_access_token
+from utils.db import create_user, get_user_by_email
+from utils.auth import hash_password, verify_password, create_access_token, verify_access_token
 
 router = APIRouter()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
 @router.post("/register", response_model=UserResponse)
@@ -41,3 +43,12 @@ def login_user_route(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = create_access_token(
         user["user_id"], user.get("is_admin", False))
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get("/verify-token")
+def verify_token_endpoint(token: str = Depends(oauth2_scheme)) -> Dict[str, str]:
+    user_data = verify_access_token(token)
+    if not user_data:
+        raise HTTPException(
+            status_code=401, detail="Invalid authentication credentials")
+    return {"message": "Token is valid", "user_data": json.dumps(user_data)}
