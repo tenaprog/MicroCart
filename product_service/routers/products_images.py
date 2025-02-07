@@ -3,7 +3,7 @@ import boto3
 import os
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
-# TODO: from utils.verify_user import verify_token_from_user_service
+# Commented out for easy testing: from utils.verify_user import verify_token_from_user_service
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ s3 = boto3.client(
 # curl.exe -X POST "http://localhost:8002/upload/" -F "file=@C:\Users\...\Screenshot.png"
 @router.post("/upload/")
 async def upload_image(file: UploadFile = File(...)):
-    #    verify_token_from_user_service(token, True)
+    # Commented out for easy testing: verify_token_from_user_service(token, True)
     try:
         file_content = await file.read()  # Read the file contents
         s3.upload_fileobj(io.BytesIO(file_content), BUCKET_NAME, file.filename)
@@ -36,7 +36,7 @@ async def upload_image(file: UploadFile = File(...)):
 # curl.exe -X GET "http://localhost:8002/list/"
 @router.get("/list/")
 def list_images():
-    #    verify_token_from_user_service(token, True)
+    # Commented out for easy testing: verify_token_from_user_service(token, True)
     try:
         response = s3.list_objects_v2(Bucket=BUCKET_NAME)
         files = [item["Key"] for item in response.get("Contents", [])]
@@ -47,7 +47,7 @@ def list_images():
 
 @router.delete("/delete/{filename}")
 def delete_image(filename: str):
-    #    verify_token_from_user_service(token, True)
+    # Commented out for easy testing: verify_token_from_user_service(token, True)
     try:
         s3.delete_object(Bucket=BUCKET_NAME, Key=filename)
         return {"message": "File deleted successfully"}

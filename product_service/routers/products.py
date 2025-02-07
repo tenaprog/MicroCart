@@ -59,6 +59,27 @@ def update_product_route(product_id: str, product: ProductUpdate, token: str = D
     return ProductResponse(**updated_product)
 
 
+@router.put("/products/{product_id}/update_quantity")
+async def update_product_quantity_route(product_id: str, quantity: int):
+    product = get_product_by_id(product_id)  # Fetch product from DB
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if product["quantity"] < quantity:
+        raise HTTPException(status_code=400, detail="Insufficient stock")
+
+    new_quantity = product["quantity"] - quantity
+    update_product(
+        product_id,
+        "SET quantity = :quantity",
+        {":quantity": new_quantity}
+    )
+
+    updated_product = get_product_by_id(product_id)
+
+    return {"message": "Product quantity updated", "product": updated_product}
+
+
 @router.delete("/products/{product_id}", status_code=204)
 def delete_product_route(product_id: str, token: str = Depends(oauth2_scheme)):
     verify_token_from_user_service(token, True)

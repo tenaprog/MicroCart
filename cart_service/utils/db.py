@@ -66,7 +66,6 @@ def remove_from_cart(user_id: str, product_id: str, quantity: int) -> Dict:
 
     if quantity >= existing_item["quantity"]:
         cart["cart_items"] = [item for item in cart["cart_items"]
-                              # Remove the item entirely
                               if item["product_id"] != product_id]
     else:
         existing_item["quantity"] -= quantity
