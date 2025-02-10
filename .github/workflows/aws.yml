@@ -12,9 +12,13 @@ jobs:
     env:
       AWS_REGION: eu-north-1
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+<<<<<<< HEAD
       ECR_USER_SERVICE: microcart
       ECR_CART_SERVICE: microcart
       ECR_PRODUCT_SERVICE: microcart
+=======
+      ECR_REPOSITORY: microcart
+>>>>>>> 61cd45e3fc6a309e2dbbfbef44165f275953be35
       ECS_CLUSTER: microcart
       ECS_SERVICE_USER: user-service
       ECS_SERVICE_CART: cart-service
@@ -37,6 +41,7 @@ jobs:
 
       - name: Build, Tag, and Push User Service Image
         run: |
+<<<<<<< HEAD
           docker build -t user-service ./user_service
           docker tag user-service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
           docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
@@ -52,6 +57,23 @@ jobs:
           docker build -t product-service ./product_service
           docker tag product-service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
           docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
+=======
+          docker build -t user_service ./user_service
+          docker tag user_service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:user_service
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:user_service
+
+      - name: Build, Tag, and Push Cart Service Image
+        run: |
+          docker build -t cart_service ./cart_service
+          docker tag cart_service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:cart_service
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:cart_service
+
+      - name: Build, Tag, and Push Product Service Image
+        run: |
+          docker build -t product_service ./product_service
+          docker tag product_service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:product_service
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:product_service
+>>>>>>> 61cd45e3fc6a309e2dbbfbef44165f275953be35
 
       - name: Update ECS Services
         run: |
