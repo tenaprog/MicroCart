@@ -11,7 +11,7 @@ env:
   ECR_REPOSITORY: microcart
   ECS_SERVICE: cart-service
   ECS_CLUSTER: microcart-cluster
-  ECS_TASK_DEFINITION: aws/cart-task-definition.json
+  ECS_TASK_DEFINITION: ./aws/cart-task-definition.json
   CONTAINER_NAME: cart-service
 
 permissions:

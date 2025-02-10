@@ -17,7 +17,6 @@ def create_user_table():
     if table_name in existing_tables:
         print(f"Table '{table_name}' already exists.")
         return
-
     print(f"Creating table '{table_name}'...")
 
     table = dynamodb.create_table(

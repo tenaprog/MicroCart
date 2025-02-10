@@ -21,5 +21,4 @@ def verify_token_from_user_service(token: str, is_admin_check: bool):
 
     if is_admin_check and not user_data.get("is_admin", True):
         raise HTTPException(status_code=403, detail="Not authorized as admin")
-
     return user_data

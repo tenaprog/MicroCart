@@ -21,5 +21,4 @@ def verify_token_from_user_service(token: str):
     response_data = response.json()
     user_data = json.loads(response_data["user_data"])
     user_id = user_data.get("sub")
-
     return user_id
