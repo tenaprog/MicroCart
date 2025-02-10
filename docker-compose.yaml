@@ -6,7 +6,7 @@ services:
       - "4566:4566"
     environment:
       - SERVICES=s3
-      - DEFAULT_REGION=eu-central-1
+      - DEFAULT_REGION=eu-north-1
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
     volumes:
@@ -17,7 +17,7 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - AWS_REGION=eu-central-1
+      - AWS_REGION=eu-north-1
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
       - DYNAMODB_ENDPOINT_URL=http://host.docker.internal:8000
@@ -33,7 +33,7 @@ services:
     ports:
       - "8003:8003"
     environment:
-      - AWS_REGION=eu-central-1
+      - AWS_REGION=eu-north-1
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
       - DYNAMODB_TABLE_NAME=cart
@@ -48,7 +48,7 @@ services:
     ports:
       - "8002:8002"
     environment:
-      - AWS_REGION=eu-central-1
+      - AWS_REGION=eu-north-1
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
       - AWS_ENDPOINT_URL=http://localstack:4566
