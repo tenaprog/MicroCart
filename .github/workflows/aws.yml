@@ -1,0 +1,63 @@
+name: Deploy MicroCart Services to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Build, Push, and Deploy Services
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: eu-north-1
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      ECR_USER_SERVICE: ${{ secrets.ECR_USER_SERVICE }}
+      ECR_CART_SERVICE: ${{ secrets.ECR_CART_SERVICE }}
+      ECR_PRODUCT_SERVICE: ${{ secrets.ECR_PRODUCT_SERVICE }}
+      ECS_CLUSTER: microcart
+      ECS_SERVICE_USER: user-service
+      ECS_SERVICE_CART: cart-service
+      ECS_SERVICE_PRODUCT: product-service
+      ECS_TASK_USER: ${{ secrets.ECS_TASK_USER }}
+      ECS_TASK_CART: ${{ secrets.ECS_TASK_CART }}
+      ECS_TASK_PRODUCT: ${{ secrets.ECS_TASK_PRODUCT }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Authenticate with Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+
+      - name: Build, Tag, and Push User Service Image
+        run: |
+          docker build -t $ECR_USER_SERVICE ./user_service
+          docker tag $ECR_USER_SERVICE:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_USER_SERVICE:latest
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_USER_SERVICE:latest
+
+      - name: Build, Tag, and Push Cart Service Image
+        run: |
+          docker build -t $ECR_CART_SERVICE ./cart_service
+          docker tag $ECR_CART_SERVICE:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_CART_SERVICE:latest
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_CART_SERVICE:latest
+
+      - name: Build, Tag, and Push Product Service Image
+        run: |
+          docker build -t $ECR_PRODUCT_SERVICE ./product_service
+          docker tag $ECR_PRODUCT_SERVICE:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_PRODUCT_SERVICE:latest
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_PRODUCT_SERVICE:latest
+
+      - name: Update ECS Task Definitions
+        run: |
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_USER --force-new-deployment
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_CART --force-new-deployment
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_PRODUCT --force-new-deployment
