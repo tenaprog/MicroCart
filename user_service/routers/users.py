@@ -43,6 +43,7 @@ def update_user_data(user_id: str, user: UserUpdate, current_user: dict = Depend
 
     update_expression = f"SET {', '.join(update_expression)}"
     update_user(user_id, update_expression, expression_attribute_values)
+
     return get_user_by_id(user_id)
 
 

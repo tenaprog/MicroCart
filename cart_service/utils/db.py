@@ -5,7 +5,6 @@ from typing import Dict, Optional
 
 DYNAMODB_TABLE_NAME = os.getenv("DYNAMODB_TABLE_NAME")
 DYNAMODB_ENDPOINT_URL = os.getenv("DYNAMODB_ENDPOINT_URL")
-
 AWS_REGION = os.getenv("AWS_REGION")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
