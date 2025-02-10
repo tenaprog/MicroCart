@@ -10,6 +10,7 @@ router = APIRouter()
 AWS_ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+
 BUCKET_NAME = "images"
 
 s3 = boto3.client(
