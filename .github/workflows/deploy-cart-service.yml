@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: eu-north-1
-  ECR_REPOSITORY: microcart-cart
+  ECR_REPOSITORY: microcart
   ECS_SERVICE: cart-service
   ECS_CLUSTER: microcart-cluster
   ECS_TASK_DEFINITION: aws/cart-task-definition.json
