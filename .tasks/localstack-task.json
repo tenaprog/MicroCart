@@ -1,0 +1,40 @@
+{
+    "family": "localstack",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::448049790780:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+        {
+            "name": "localstack",
+            "image": "localstack/localstack",
+            "portMappings": [
+                {
+                    "containerPort": 4566,
+                    "hostPort": 4566
+                }
+            ],
+            "environment": [
+                {
+                    "name": "SERVICES",
+                    "value": "s3"
+                },
+                {
+                    "name": "DEFAULT_REGION",
+                    "value": "eu-north-1"
+                },
+                {
+                    "name": "AWS_ACCESS_KEY_ID",
+                    "value": "dummy"
+                },
+                {
+                    "name": "AWS_SECRET_ACCESS_KEY",
+                    "value": "dummy"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,27 @@
+{
+    "family": "dynamodb",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "executionRoleArn": "arn:aws:iam::448049790780:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+        {
+            "name": "dynamodb",
+            "image": "amazon/dynamodb-local",
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000
+                }
+            ],
+            "command": [
+                "-jar",
+                "DynamoDBLocal.jar",
+                "-sharedDb"
+            ]
+        }
+    ]
+}

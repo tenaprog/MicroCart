@@ -1,0 +1,56 @@
+{
+    "family": "user-service",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "512",
+    "memory": "1024",
+    "executionRoleArn": "arn:aws:iam::448049790780:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+        {
+            "name": "user-service",
+            "image": "448049790780.dkr.ecr.eu-north-1.amazonaws.com/microcart:user-service",
+            "portMappings": [
+                {
+                    "containerPort": 8001,
+                    "hostPort": 8001
+                }
+            ],
+            "environment": [
+                {
+                    "name": "AWS_REGION",
+                    "value": "eu-north-1"
+                },
+                {
+                    "name": "AWS_ACCESS_KEY_ID",
+                    "value": "dummy"
+                },
+                {
+                    "name": "AWS_SECRET_ACCESS_KEY",
+                    "value": "dummy"
+                },
+                {
+                    "name": "DYNAMODB_ENDPOINT_URL",
+                    "value": "http://host.docker.internal:8000"
+                },
+                {
+                    "name": "DYNAMODB_TABLE_NAME",
+                    "value": "users"
+                },
+                {
+                    "name": "SECRET_KEY",
+                    "value": "my_secret_key"
+                },
+                {
+                    "name": "ALGORITHM",
+                    "value": "HS256"
+                },
+                {
+                    "name": "ACCESS_TOKEN_EXPIRE_MINUTES",
+                    "value": "30"
+                }
+            ]
+        }
+    ]
+}
