@@ -32,7 +32,6 @@ def get_user_by_email(email: str):
             FilterExpression="email = :email",
             ExpressionAttributeValues={":email": email}
         )
-
         if response["Items"]:
             return response["Items"][0]
         return None
