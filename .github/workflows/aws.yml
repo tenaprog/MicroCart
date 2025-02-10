@@ -1,82 +1,85 @@
-name: Deploy MicroCart Services to AWS
+name: Deploy MicroCart to AWS ECS
 
 on:
   push:
     branches:
-      - main
+      - main  # Deploy only when pushing to the main branch
+
+env:
+  AWS_REGION: eu-north-1
+  CLUSTER_NAME: microcart
+  SUBNETS: ${{ secrets.SUBNETS }}
+  SECURITY_GROUP: ${{ secrets.SECURITY_GROUP }}
+  ECR_REPOSITORY: microcart
+  TASK_ROLE_ARN: arn:aws:iam::448049790780:role/ecsTaskExecutionRole
 
 jobs:
   deploy:
-    name: Build, Push, and Deploy Services
+    name: Deploy to AWS ECS
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: eu-north-1
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-<<<<<<< HEAD
-      ECR_USER_SERVICE: microcart
-      ECR_CART_SERVICE: microcart
-      ECR_PRODUCT_SERVICE: microcart
-=======
-      ECR_REPOSITORY: microcart
->>>>>>> 61cd45e3fc6a309e2dbbfbef44165f275953be35
-      ECS_CLUSTER: microcart
-      ECS_SERVICE_USER: user-service
-      ECS_SERVICE_CART: cart-service
-      ECS_SERVICE_PRODUCT: product-service
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
 
-      - name: Authenticate with Amazon ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+    - name: Login to Amazon ECR
+      run: |
+        aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin 448049790780.dkr.ecr.$AWS_REGION.amazonaws.com
 
-      - name: Build, Tag, and Push User Service Image
-        run: |
-<<<<<<< HEAD
-          docker build -t user-service ./user_service
-          docker tag user-service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
-          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
+    - name: Build, Tag, and Push Docker Images
+      run: |
+        for SERVICE in user_service cart_service product_service; do
+          IMAGE_URI="448049790780.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$SERVICE"
+          docker build -t $IMAGE_URI ./$SERVICE
+          docker push $IMAGE_URI
+        done
 
-      - name: Build, Tag, and Push Cart Service Image
-        run: |
-          docker build -t cart-service ./cart_service
-          docker tag cart-service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
-          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
+    - name: Register ECS Task Definitions
+      run: |
+        for SERVICE in user-service cart-service product-service; do
+          TASK_JSON=$(cat <<EOF
+          {
+            "family": "$SERVICE",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "512",
+            "memory": "1024",
+            "executionRoleArn": "$TASK_ROLE_ARN",
+            "containerDefinitions": [
+              {
+                "name": "$SERVICE",
+                "image": "448049790780.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$SERVICE",
+                "portMappings": [
+                  { "containerPort": ${SERVICE: -1}001, "hostPort": ${SERVICE: -1}001 }
+                ],
+                "environment": [
+                  {"name": "AWS_REGION", "value": "$AWS_REGION"},
+                  {"name": "AWS_ACCESS_KEY_ID", "value": "dummy"},
+                  {"name": "AWS_SECRET_ACCESS_KEY", "value": "dummy"},
+                  {"name": "DYNAMODB_ENDPOINT_URL", "value": "http://host.docker.internal:8000"},
+                  {"name": "USER_SERVICE_URL", "value": "http://host.docker.internal:8001"},
+                  {"name": "PRODUCT_SERVICE_URL", "value": "http://host.docker.internal:8002"}
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          echo "$TASK_JSON" > task-definition.json
+          aws ecs register-task-definition --cli-input-json file://task-definition.json
+        done
 
-      - name: Build, Tag, and Push Product Service Image
-        run: |
-          docker build -t product-service ./product_service
-          docker tag product-service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
-          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/microcart:latest
-=======
-          docker build -t user_service ./user_service
-          docker tag user_service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:user_service
-          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:user_service
-
-      - name: Build, Tag, and Push Cart Service Image
-        run: |
-          docker build -t cart_service ./cart_service
-          docker tag cart_service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:cart_service
-          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:cart_service
-
-      - name: Build, Tag, and Push Product Service Image
-        run: |
-          docker build -t product_service ./product_service
-          docker tag product_service:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:product_service
-          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:product_service
->>>>>>> 61cd45e3fc6a309e2dbbfbef44165f275953be35
-
-      - name: Update ECS Services
-        run: |
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_USER --force-new-deployment
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_CART --force-new-deployment
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_PRODUCT --force-new-deployment
+    - name: Deploy ECS Services
+      run: |
+        for SERVICE in user-service cart-service product-service; do
+          aws ecs create-service --cluster $CLUSTER_NAME --service-name $SERVICE \
+            --task-definition $SERVICE --desired-count 1 --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUP],assignPublicIp=ENABLED}"
+        done
