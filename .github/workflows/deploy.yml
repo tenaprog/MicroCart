@@ -28,64 +28,92 @@ jobs:
         run: |
           curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux && chmod +x copilot && mv copilot /usr/local/bin/copilot
 
-      # Step 3: Initialize Copilot Application if not already initialized
+      # Step 3: Check and Create Environment if not exists
+      - name: Check and Create Environment
+        run: |
+          if ! copilot env ls --app microcart-app | grep -q "production"; then
+            echo "Production environment not found. Creating production environment..."
+            copilot env init --name production --app microcart-app || echo "Production environment already exists."
+          else
+            echo "Production environment already exists."
+          fi
+
+      # Step 4: Initialize Copilot Application if not already initialized
       - name: Initialize Copilot Application
         run: |
+          if ! copilot app ls | grep -q "microcart-app"; then
+            echo "Initializing Copilot application..."
+            copilot app init --name microcart-app
+          else
+            echo "Copilot application 'microcart-app' already initialized."
+          fi
           copilot init --app microcart-app --name user-service --type "Load Balanced Web Service" --dockerfile ./user_service/Dockerfile || echo "User Service already initialized"
           copilot init --app microcart-app --name product-service --type "Load Balanced Web Service" --dockerfile ./product_service/Dockerfile || echo "Product Service already initialized"
           copilot init --app microcart-app --name cart-service --type "Load Balanced Web Service" --dockerfile ./cart_service/Dockerfile || echo "Cart Service already initialized"
 
-      # Step 4: Create DynamoDB Tables for All Services
-
-      # Create DynamoDB Table for User Service
+      # Step 5: Check and Create DynamoDB Tables if not exists
       - name: Create DynamoDB Table for User Service
         run: |
-          aws dynamodb create-table \
-            --table-name users \
-            --attribute-definitions AttributeName=user_id,AttributeType=S \
-            --key-schema AttributeName=user_id,KeyType=HASH \
-            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-            --region eu-north-1 || echo "Users table already exists"
+          if ! aws dynamodb describe-table --table-name users --region eu-north-1 > /dev/null 2>&1; then
+            aws dynamodb create-table \
+              --table-name users \
+              --attribute-definitions AttributeName=user_id,AttributeType=S \
+              --key-schema AttributeName=user_id,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+              --region eu-north-1
+          else
+            echo "Users table already exists."
+          fi
 
-      # Create DynamoDB Table for Product Service
       - name: Create DynamoDB Table for Product Service
         run: |
-          aws dynamodb create-table \
-            --table-name products \
-            --attribute-definitions AttributeName=product_id,AttributeType=S \
-            --key-schema AttributeName=product_id,KeyType=HASH \
-            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-            --region eu-north-1 || echo "Products table already exists"
+          if ! aws dynamodb describe-table --table-name products --region eu-north-1 > /dev/null 2>&1; then
+            aws dynamodb create-table \
+              --table-name products \
+              --attribute-definitions AttributeName=product_id,AttributeType=S \
+              --key-schema AttributeName=product_id,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+              --region eu-north-1
+          else
+            echo "Products table already exists."
+          fi
 
-      # Create DynamoDB Table for Cart Service
       - name: Create DynamoDB Table for Cart Service
         run: |
-          aws dynamodb create-table \
-            --table-name carts \
-            --attribute-definitions AttributeName=cart_id,AttributeType=S \
-            --key-schema AttributeName=cart_id,KeyType=HASH \
-            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-            --region eu-north-1 || echo "Carts table already exists"
+          if ! aws dynamodb describe-table --table-name carts --region eu-north-1 > /dev/null 2>&1; then
+            aws dynamodb create-table \
+              --table-name carts \
+              --attribute-definitions AttributeName=cart_id,AttributeType=S \
+              --key-schema AttributeName=cart_id,KeyType=HASH \
+              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+              --region eu-north-1
+          else
+            echo "Carts table already exists."
+          fi
 
-      # Step 5: Create S3 Bucket for Product Service
+      # Step 6: Check and Create S3 Bucket for Product Service
       - name: Create S3 Bucket for Product Service
         run: |
-          aws s3 mb s3://microcart-products --region eu-north-1 || echo "S3 bucket already exists"
+          if ! aws s3 ls "s3://microcart-products" --region eu-north-1 > /dev/null 2>&1; then
+            aws s3 mb s3://microcart-products --region eu-north-1
+          else
+            echo "S3 bucket for products already exists."
+          fi
 
-      # Step 6: Deploy Services with Copilot (no need to specify environment, it uses default)
+      # Step 7: Deploy Services with Copilot (no need to specify environment, it uses default)
       - name: Deploy Services with Copilot
         run: |
-          copilot svc deploy --name user-service
-          copilot svc deploy --name product-service
-          copilot svc deploy --name cart-service
+          copilot svc deploy --name user-service --env production
+          copilot svc deploy --name product-service --env production
+          copilot svc deploy --name cart-service --env production
 
-      # Step 7: Output Deployment URLs
+      # Step 8: Output Deployment URLs
       - name: Output Deployment URLs
         run: |
-          echo "User Service URL: https://$(copilot svc show --name user-service | grep 'URL' | awk '{print $2}')"
-          echo "Product Service URL: https://$(copilot svc show --name product-service | grep 'URL' | awk '{print $2}')"
-          echo "Cart Service URL: https://$(copilot svc show --name cart-service | grep 'URL' | awk '{print $2}')"
+          echo "User Service URL: https://$(copilot svc show --name user-service --env production | grep 'URL' | awk '{print $2}')"
+          echo "Product Service URL: https://$(copilot svc show --name product-service --env production | grep 'URL' | awk '{print $2}')"
+          echo "Cart Service URL: https://$(copilot svc show --name cart-service --env production | grep 'URL' | awk '{print $2}')"
           
-      # Step 8: Confirm successful deployment
+      # Step 9: Confirm successful deployment
       - name: Deployment Complete
         run: echo "Deployment to AWS completed successfully!"
