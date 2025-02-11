@@ -1,12 +1,17 @@
-FROM python:3.10-slim
+FROM python:3.8-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY cart_service/requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY cart_service/ .
+
+ENV AWS_REGION=eu-north-1
+ENV AWS_ACCESS_KEY_ID=dummy
+ENV AWS_SECRET_ACCESS_KEY=dummy
 
 EXPOSE 8003
 
-CMD ["sh", "-c", "python create_tables.py && uvicorn main:app --host 0.0.0.0 --port 8003"]
+CMD ["python", "main.py"]

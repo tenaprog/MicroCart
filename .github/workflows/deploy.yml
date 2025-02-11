@@ -1,4 +1,4 @@
-name: Deploy to AWS ECS
+name: Deploy to AWS
 
 on:
   push:
@@ -8,57 +8,84 @@ on:
     branches:
       - main
 
-env:
-  AWS_REGION: eu-north-1
-  ECR_REPOSITORY_CART: 448049790780.dkr.ecr.eu-north-1.amazonaws.com/cart-service
-  ECR_REPOSITORY_PRODUCT: 448049790780.dkr.ecr.eu-north-1.amazonaws.com/product-service
-  ECR_REPOSITORY_USER: 448049790780.dkr.ecr.eu-north-1.amazonaws.com/user-service
-  ECS_CLUSTER: microcart-cluster
-  ECS_SERVICE_CART: cart-service
-  ECS_SERVICE_PRODUCT: product-service
-  ECS_SERVICE_USER: user-service
-
 jobs:
   deploy:
-    name: Build, Push & Deploy
     runs-on: ubuntu-latest
-
     steps:
+      # Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      # Set up AWS CLI and Copilot CLI
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: eu-north-1
 
-      - name: Log in to Amazon ECR
+      - name: Install Copilot CLI
         run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_CART
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_PRODUCT
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_USER
+          curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux && chmod +x copilot && mv copilot /usr/local/bin/copilot
 
-      - name: Build, tag, and push Docker images
+      # Initialize Copilot Application if not already initialized
+      - name: Initialize Copilot Application
         run: |
-          # Cart Service
-          docker build -t cart-service ./cart_service
-          docker tag cart-service:latest $ECR_REPOSITORY_CART:latest
-          docker push $ECR_REPOSITORY_CART:latest
+          copilot init --app microcart-app --name user-service --type "Load Balanced Web Service" --dockerfile ./user_service/Dockerfile || echo "App already initialized"
+          copilot init --app microcart-app --name product-service --type "Load Balanced Web Service" --dockerfile ./product_service/Dockerfile || echo "App already initialized"
+          copilot init --app microcart-app --name cart-service --type "Load Balanced Web Service" --dockerfile ./cart_service/Dockerfile || echo "App already initialized"
+
+      # Create DynamoDB Tables for All Services
+
+      # Create DynamoDB Table for User Service
+      - name: Create DynamoDB Table for User Service
+        run: |
+          aws dynamodb create-table \
+            --table-name users \
+            --attribute-definitions AttributeName=user_id,AttributeType=S \
+            --key-schema AttributeName=user_id,KeyType=HASH \
+            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+            --region eu-north-1 || echo "Users table already exists"
+
+      # Create DynamoDB Table for Product Service
+      - name: Create DynamoDB Table for Product Service
+        run: |
+          aws dynamodb create-table \
+            --table-name products \
+            --attribute-definitions AttributeName=product_id,AttributeType=S \
+            --key-schema AttributeName=product_id,KeyType=HASH \
+            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+            --region eu-north-1 || echo "Products table already exists"
+
+      # Create DynamoDB Table for Cart Service
+      - name: Create DynamoDB Table for Cart Service
+        run: |
+          aws dynamodb create-table \
+            --table-name carts \
+            --attribute-definitions AttributeName=cart_id,AttributeType=S \
+            --key-schema AttributeName=cart_id,KeyType=HASH \
+            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+            --region eu-north-1 || echo "Carts table already exists"
+
+      # Create S3 Bucket for Product Service
+      - name: Create S3 Bucket for Product Service
+        run: |
+          aws s3 mb s3://microcart-products --region eu-north-1 || echo "S3 bucket already exists"
+
+      # Deploy Services with Copilot
+      - name: Deploy Services with Copilot
+        run: |
+          copilot svc deploy --name user-service --env production
+          copilot svc deploy --name product-service --env production
+          copilot svc deploy --name cart-service --env production
+
+      # Output Deployment Status
+      - name: Output Deployment URLs
+        run: |
+          echo "User Service URL: https://$(copilot svc show --name user-service --env production | grep 'URL' | awk '{print $2}')"
+          echo "Product Service URL: https://$(copilot svc show --name product-service --env production | grep 'URL' | awk '{print $2}')"
+          echo "Cart Service URL: https://$(copilot svc show --name cart-service --env production | grep 'URL' | awk '{print $2}')"
           
-          # Product Service
-          docker build -t product-service ./product_service
-          docker tag product-service:latest $ECR_REPOSITORY_PRODUCT:latest
-          docker push $ECR_REPOSITORY_PRODUCT:latest
-
-          # User Service
-          docker build -t user-service ./user_service
-          docker tag user-service:latest $ECR_REPOSITORY_USER:latest
-          docker push $ECR_REPOSITORY_USER:latest
-
-      - name: Deploy to ECS
-        run: |
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_CART --force-new-deployment
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_PRODUCT --force-new-deployment
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_USER --force-new-deployment
+      # Confirm successful deployment
+      - name: Deployment Complete
+        run: echo "Deployment to AWS completed successfully!"
