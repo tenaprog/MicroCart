@@ -123,6 +123,7 @@ jobs:
                 ]
               }
             ],
+            "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:user/${{ secrets.AWS_ACCOUNT_USER }}"
             "requiresCompatibilities": ["FARGATE"],
             "cpu": "256",
             "memory": "512"
@@ -150,6 +151,7 @@ jobs:
                 ]
               }
             ],
+            "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:user/${{ secrets.AWS_ACCOUNT_USER }}"
             "requiresCompatibilities": ["FARGATE"],
             "cpu": "256",
             "memory": "512"
@@ -177,6 +179,7 @@ jobs:
                 ]
               }
             ],
+            "executionRoleArn": "arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:user/${{ secrets.AWS_ACCOUNT_USER }}"
             "requiresCompatibilities": ["FARGATE"],
             "cpu": "256",
             "memory": "512"
