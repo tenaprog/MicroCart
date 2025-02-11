@@ -12,11 +12,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Checkout the repository
+      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Set up AWS CLI and Copilot CLI
+      # Step 2: Set up AWS CLI and Copilot CLI
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -28,14 +28,25 @@ jobs:
         run: |
           curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux && chmod +x copilot && mv copilot /usr/local/bin/copilot
 
-      # Initialize Copilot Application if not already initialized
+      # Step 3: Check if the production environment exists, create it if not
+      - name: Check and Create Production Environment
+        run: |
+          # Check if the production environment exists
+          if ! copilot env ls --app microcart-app | grep -q "production"; then
+            echo "Production environment not found. Creating production environment..."
+            copilot env init --name production --profile default --app microcart-app
+          else
+            echo "Production environment already exists."
+          fi
+
+      # Step 4: Initialize Copilot Application if not already initialized
       - name: Initialize Copilot Application
         run: |
-          copilot init --app microcart-app --name user-service --type "Load Balanced Web Service" --dockerfile ./user_service/Dockerfile || echo "App already initialized"
-          copilot init --app microcart-app --name product-service --type "Load Balanced Web Service" --dockerfile ./product_service/Dockerfile || echo "App already initialized"
-          copilot init --app microcart-app --name cart-service --type "Load Balanced Web Service" --dockerfile ./cart_service/Dockerfile || echo "App already initialized"
+          copilot init --app microcart-app --name user-service --type "Load Balanced Web Service" --dockerfile ./user_service/Dockerfile || echo "User Service already initialized"
+          copilot init --app microcart-app --name product-service --type "Load Balanced Web Service" --dockerfile ./product_service/Dockerfile || echo "Product Service already initialized"
+          copilot init --app microcart-app --name cart-service --type "Load Balanced Web Service" --dockerfile ./cart_service/Dockerfile || echo "Cart Service already initialized"
 
-      # Create DynamoDB Tables for All Services
+      # Step 5: Create DynamoDB Tables for All Services
 
       # Create DynamoDB Table for User Service
       - name: Create DynamoDB Table for User Service
@@ -62,30 +73,30 @@ jobs:
         run: |
           aws dynamodb create-table \
             --table-name carts \
-            --attribute-definitions AttributeName=cart_id,AttributeType=S \
-            --key-schema AttributeName=cart_id,KeyType=HASH \
+            --attribute-definitions AttributeName=user_id,AttributeType=S \
+            --key-schema AttributeName=user_id,KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
             --region eu-north-1 || echo "Carts table already exists"
 
-      # Create S3 Bucket for Product Service
+      # Step 6: Create S3 Bucket for Product Service
       - name: Create S3 Bucket for Product Service
         run: |
           aws s3 mb s3://microcart-products --region eu-north-1 || echo "S3 bucket already exists"
 
-      # Deploy Services with Copilot
+      # Step 7: Deploy Services with Copilot
       - name: Deploy Services with Copilot
         run: |
           copilot svc deploy --name user-service --env production
           copilot svc deploy --name product-service --env production
           copilot svc deploy --name cart-service --env production
 
-      # Output Deployment Status
+      # Step 8: Output Deployment URLs
       - name: Output Deployment URLs
         run: |
           echo "User Service URL: https://$(copilot svc show --name user-service --env production | grep 'URL' | awk '{print $2}')"
           echo "Product Service URL: https://$(copilot svc show --name product-service --env production | grep 'URL' | awk '{print $2}')"
           echo "Cart Service URL: https://$(copilot svc show --name cart-service --env production | grep 'URL' | awk '{print $2}')"
           
-      # Confirm successful deployment
+      # Step 9: Confirm successful deployment
       - name: Deployment Complete
         run: echo "Deployment to AWS completed successfully!"
