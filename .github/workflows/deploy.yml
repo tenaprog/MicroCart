@@ -27,25 +27,12 @@ jobs:
       # Install Copilot CLI with Retry Logic and Correct Permissions
       - name: Install Copilot CLI
         run: |
-          attempt=0
-          max_attempts=3
-          success=false
-          while [ $attempt -lt $max_attempts ]; do
-            curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux
-            chmod +x copilot
-            sudo mv copilot /usr/local/bin/copilot && success=true && break
-            attempt=$((attempt + 1))
-            echo "Attempt $attempt failed. Retrying in 5 seconds..."
-            sleep 5
-          done
-          if [ "$success" = false ]; then
-            echo "Failed to install Copilot after $max_attempts attempts."
-            exit 1
-          fi
-
-      # Verify Copilot CLI Installation
-      - name: Verify Copilot CLI Installation
-        run: |
+          # Install to ~/bin directory and update PATH
+          mkdir -p ~/bin
+          curl -Lo ~/bin/copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux
+          chmod +x ~/bin/copilot
+          echo "export PATH=\$PATH:~/bin" >> ~/.bashrc
+          source ~/.bashrc
           copilot --version
 
       # Initialize Copilot Application if not already initialized
