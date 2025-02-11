@@ -12,11 +12,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Checkout the repository
+      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Set up AWS CLI
+      # Step 2: Set up AWS CLI using GitHub Secrets
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -24,20 +24,22 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      # Install Copilot CLI with Retry Logic and Correct Permissions
+      # Step 3: Install Copilot CLI into ~/bin and export it into PATH
       - name: Install Copilot CLI
         run: |
-          # Install to ~/bin directory and update PATH
           mkdir -p ~/bin
           curl -Lo ~/bin/copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux
           chmod +x ~/bin/copilot
-          echo "export PATH=\$PATH:~/bin" >> ~/.bashrc
-          source ~/.bashrc
+          # Export ~/bin into PATH for this step (and subsequent steps in this job)
+          export PATH="$HOME/bin:$PATH"
+          echo "PATH is: $PATH"
+          which copilot
           copilot --version
 
-      # Initialize Copilot Application if not already initialized
+      # Step 4: Initialize Copilot Application if not already initialized
       - name: Initialize Copilot Application
         run: |
+          export PATH="$HOME/bin:$PATH"
           if ! copilot app ls | grep -q "microcart-app"; then
             echo "Initializing Copilot application..."
             copilot app init --name microcart-app || exit 1
@@ -45,9 +47,10 @@ jobs:
             echo "Copilot application 'microcart-app' already initialized."
           fi
 
-      # Check and Create Environment if not exists
+      # Step 5: Check and Create Environment if not exists
       - name: Check and Create Environment
         run: |
+          export PATH="$HOME/bin:$PATH"
           if ! copilot env ls --app microcart-app | grep -q "production"; then
             echo "Production environment not found. Creating production environment..."
             copilot env init --name production --app microcart-app --profile default || exit 1
@@ -55,7 +58,7 @@ jobs:
             echo "Production environment already exists."
           fi
 
-      # Create DynamoDB Tables for All Services
+      # Step 6: Create DynamoDB Tables for All Services
       - name: Create DynamoDB Table for User Service
         run: |
           aws dynamodb create-table \
@@ -83,25 +86,27 @@ jobs:
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
             --region eu-north-1 || echo "Carts table already exists"
 
-      # Create S3 Bucket for Product Service
+      # Step 7: Create S3 Bucket for Product Service
       - name: Create S3 Bucket for Product Service
         run: |
           aws s3 mb s3://microcart-products --region eu-north-1 || echo "S3 bucket already exists"
 
-      # Deploy Services with Copilot
+      # Step 8: Deploy Services with Copilot
       - name: Deploy Services with Copilot
         run: |
+          export PATH="$HOME/bin:$PATH"
           copilot svc deploy --name user-service --env production
           copilot svc deploy --name product-service --env production
           copilot svc deploy --name cart-service --env production
 
-      # Output Deployment URLs
+      # Step 9: Output Deployment URLs
       - name: Output Deployment URLs
         run: |
+          export PATH="$HOME/bin:$PATH"
           echo "User Service URL: https://$(copilot svc show --name user-service --env production | grep 'URL' | awk '{print $2}')"
           echo "Product Service URL: https://$(copilot svc show --name product-service --env production | grep 'URL' | awk '{print $2}')"
           echo "Cart Service URL: https://$(copilot svc show --name cart-service --env production | grep 'URL' | awk '{print $2}')"
           
-      # Confirm successful deployment
+      # Step 10: Confirm successful deployment
       - name: Deployment Complete
         run: echo "Deployment to AWS completed successfully!"
