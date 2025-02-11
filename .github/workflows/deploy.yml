@@ -82,7 +82,7 @@ jobs:
             --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "Products table already exists"
           
           aws dynamodb create-table \
-            --table-name carts \
+            --table-name cart \
             --attribute-definitions AttributeName=user_id,AttributeType=S \
             --key-schema AttributeName=user_id,KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
@@ -94,12 +94,22 @@ jobs:
           echo "Creating S3 bucket for product service..."
           aws s3 mb s3://microcart-products --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "S3 bucket already exists"
 
-      # Create ECS Cluster if it doesn't exist
-      - name: Create ECS Cluster
+       # Create ECS Cluster if it doesn't exist
+      - name: Create ECS Cluster if it doesn't exist
         run: |
-          echo "Creating ECS cluster if it doesn't exist..."
-          aws ecs describe-clusters --clusters microcart-cluster || aws ecs create-cluster --cluster-name microcart-cluster
+          echo "Checking if ECS cluster exists..."
+          CLUSTER_NAME="microcart-cluster"
+          CLUSTER_STATUS=$(aws ecs describe-clusters --clusters $CLUSTER_NAME --query "clusters[0].status" --output text --region ${{ secrets.AWS_DEFAULT_REGION }})
 
+          if [ "$CLUSTER_STATUS" == "ACTIVE" ]; then
+            echo "Cluster '$CLUSTER_NAME' exists and is active."
+          else
+            echo "Cluster '$CLUSTER_NAME' does not exist or is not active. Creating it..."
+            # Create ECS Cluster if it doesn't exist
+            aws ecs create-cluster --cluster-name $CLUSTER_NAME --region ${{ secrets.AWS_DEFAULT_REGION }}
+            echo "Cluster '$CLUSTER_NAME' created."
+          fi
+          
       # Register ECS Task Definitions
       - name: Register ECS Task Definitions
         run: |
