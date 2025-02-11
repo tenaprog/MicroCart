@@ -197,50 +197,55 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://cart-service-task.json
 
-      # Create ECS Services if they do not exist or update them if they exist
-      - name: Create or Update ECS Services
+    # Fetch the existing Application Load Balancer (ALB) ARN
+      - name: Get ALB ARN
         run: |
-          echo "Creating or updating ECS services for User, Product, and Cart..."
-          
-          # Function to create or update ECS service
+          ALB_NAME="microcart-alb"  # Replace with your actual ALB name
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names $ALB_NAME --query 'LoadBalancers[0].LoadBalancerArn' --output text --region ${{ secrets.AWS_DEFAULT_REGION }})
+          echo "ALB ARN: $ALB_ARN"
+          echo "ALB_ARN=$ALB_ARN" >> $GITHUB_ENV
+
+      # Fetch the existing Target Group ARNs for each service
+      - name: Get Target Group ARNs
+        run: |
+          USER_TG_ARN=$(aws elbv2 describe-target-groups --names user-service-tg --query 'TargetGroups[0].TargetGroupArn' --output text --region ${{ secrets.AWS_DEFAULT_REGION }})
+          PRODUCT_TG_ARN=$(aws elbv2 describe-target-groups --names product-service-tg --query 'TargetGroups[0].TargetGroupArn' --output text --region ${{ secrets.AWS_DEFAULT_REGION }})
+          CART_TG_ARN=$(aws elbv2 describe-target-groups --names cart-service-tg --query 'TargetGroups[0].TargetGroupArn' --output text --region ${{ secrets.AWS_DEFAULT_REGION }})
+
+          echo "USER_TG_ARN=$USER_TG_ARN" >> $GITHUB_ENV
+          echo "PRODUCT_TG_ARN=$PRODUCT_TG_ARN" >> $GITHUB_ENV
+          echo "CART_TG_ARN=$CART_TG_ARN" >> $GITHUB_ENV
+
+      # Create or Update ECS Services with existing Load Balancer and Target Groups
+      - name: Create or Update ECS Services with Load Balancer
+        run: |
+          echo "Creating or updating ECS services with load balancer integration..."
+
+          # Function to create/update ECS services
           create_or_update_service() {
             SERVICE_NAME=$1
             TASK_DEFINITION=$2
-            CLUSTER_NAME=$3
-            SUBNETS=$4
-            SECURITY_GROUPS=$5
+            TARGET_GROUP_ARN=$3
 
-            # Check if service exists
-            SERVICE_EXISTS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].serviceName' --output text)
-            
-            if [ "$SERVICE_EXISTS" == "$SERVICE_NAME" ]; then
-              echo "$SERVICE_NAME exists. Updating the service..."
-              aws ecs update-service \
-                --cluster $CLUSTER_NAME \
-                --service $SERVICE_NAME \
-                --task-definition $TASK_DEFINITION \
-                --desired-count 1 \
-                --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}"
-            else
-              echo "$SERVICE_NAME does not exist. Creating the service..."
-              aws ecs create-service \
-                --cluster $CLUSTER_NAME \
-                --service-name $SERVICE_NAME \
-                --task-definition $TASK_DEFINITION \
-                --desired-count 1 \
-                --launch-type FARGATE \
-                --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}"
-            fi
+            aws ecs create-service \
+              --cluster microcart-cluster \
+              --service-name $SERVICE_NAME \
+              --task-definition $TASK_DEFINITION \
+              --desired-count 1 \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}" \
+              --load-balancers "targetGroupArn=$TARGET_GROUP_ARN,containerName=$SERVICE_NAME,containerPort=80" \
+              --region ${{ secrets.AWS_DEFAULT_REGION }}
           }
 
-          # Create or update each service
-          create_or_update_service "user-service" "user-service-task" "microcart-cluster" "${{ secrets.AWS_SUBNETS }}" "${{ secrets.AWS_SECURITY_GROUPS }}"
-          create_or_update_service "product-service" "product-service-task" "microcart-cluster" "${{ secrets.AWS_SUBNETS }}" "${{ secrets.AWS_SECURITY_GROUPS }}"
-          create_or_update_service "cart-service" "cart-service-task" "microcart-cluster" "${{ secrets.AWS_SUBNETS }}" "${{ secrets.AWS_SECURITY_GROUPS }}"
-     
-          # Output ECS Service URL
+          # Create or update each ECS service
+          create_or_update_service "user-service" "user-service-task" "$USER_TG_ARN"
+          create_or_update_service "product-service" "product-service-task" "$PRODUCT_TG_ARN"
+          create_or_update_service "cart-service" "cart-service-task" "$CART_TG_ARN"
+
+      # Output ECS service URLs
       - name: Output ECS service URLs
         run: |
-          echo "User Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services user-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
-          echo "Product Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services product-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
-          echo "Cart Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services cart-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
+          echo "User Service URL: http://$(aws elbv2 describe-load-balancers --names microcart-alb --query 'LoadBalancers[0].DNSName' --output text --region ${{ secrets.AWS_DEFAULT_REGION }})/user-service"
+          echo "Product Service URL: http://$(aws elbv2 describe-load-balancers --names microcart-alb --query 'LoadBalancers[0].DNSName' --output text --region ${{ secrets.AWS_DEFAULT_REGION }})/product-service"
+          echo "Cart Service URL: http://$(aws elbv2 describe-load-balancers --names microcart-alb --query 'LoadBalancers[0].DNSName' --output text --region ${{ secrets.AWS_DEFAULT_REGION }})/cart-service"
