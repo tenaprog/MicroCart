@@ -12,11 +12,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout the repository
+      # Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Step 2: Set up AWS CLI and Copilot CLI
+      # Set up AWS CLI
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -24,96 +24,94 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
+      # Install Copilot CLI with Retry Logic
       - name: Install Copilot CLI
         run: |
-          curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux && chmod +x copilot && mv copilot /usr/local/bin/copilot
-
-      # Step 3: Check and Create Environment if not exists
-      - name: Check and Create Environment
-        run: |
-          if ! copilot env ls --app microcart-app | grep -q "production"; then
-            echo "Production environment not found. Creating production environment..."
-            copilot env init --name production --app microcart-app || echo "Production environment already exists."
-          else
-            echo "Production environment already exists."
+          attempt=0
+          max_attempts=3
+          success=false
+          while [ $attempt -lt $max_attempts ]; do
+            curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux && chmod +x copilot && mv copilot /usr/local/bin/copilot && success=true && break
+            attempt=$((attempt + 1))
+            echo "Attempt $attempt failed. Retrying in 5 seconds..."
+            sleep 5
+          done
+          if [ "$success" = false ]; then
+            echo "Failed to install Copilot after $max_attempts attempts."
+            exit 1
           fi
 
-      # Step 4: Initialize Copilot Application if not already initialized
+      # Verify Copilot CLI Installation
+      - name: Verify Copilot CLI Installation
+        run: copilot --version
+
+      # Initialize Copilot Application if not already initialized
       - name: Initialize Copilot Application
         run: |
           if ! copilot app ls | grep -q "microcart-app"; then
             echo "Initializing Copilot application..."
-            copilot app init --name microcart-app
+            copilot app init --name microcart-app || exit 1
           else
             echo "Copilot application 'microcart-app' already initialized."
           fi
-          copilot init --app microcart-app --name user-service --type "Load Balanced Web Service" --dockerfile ./user_service/Dockerfile || echo "User Service already initialized"
-          copilot init --app microcart-app --name product-service --type "Load Balanced Web Service" --dockerfile ./product_service/Dockerfile || echo "Product Service already initialized"
-          copilot init --app microcart-app --name cart-service --type "Load Balanced Web Service" --dockerfile ./cart_service/Dockerfile || echo "Cart Service already initialized"
 
-      # Step 5: Check and Create DynamoDB Tables if not exists
+      # Check and Create Environment if not exists
+      - name: Check and Create Environment
+        run: |
+          if ! copilot env ls --app microcart-app | grep -q "production"; then
+            echo "Production environment not found. Creating production environment..."
+            copilot env init --name production --app microcart-app --profile default || exit 1
+          else
+            echo "Production environment already exists."
+          fi
+
+      # Create DynamoDB Tables for All Services
       - name: Create DynamoDB Table for User Service
         run: |
-          if ! aws dynamodb describe-table --table-name users --region eu-north-1 > /dev/null 2>&1; then
-            aws dynamodb create-table \
-              --table-name users \
-              --attribute-definitions AttributeName=user_id,AttributeType=S \
-              --key-schema AttributeName=user_id,KeyType=HASH \
-              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-              --region eu-north-1
-          else
-            echo "Users table already exists."
-          fi
+          aws dynamodb create-table \
+            --table-name users \
+            --attribute-definitions AttributeName=user_id,AttributeType=S \
+            --key-schema AttributeName=user_id,KeyType=HASH \
+            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+            --region eu-north-1 || echo "Users table already exists"
 
       - name: Create DynamoDB Table for Product Service
         run: |
-          if ! aws dynamodb describe-table --table-name products --region eu-north-1 > /dev/null 2>&1; then
-            aws dynamodb create-table \
-              --table-name products \
-              --attribute-definitions AttributeName=product_id,AttributeType=S \
-              --key-schema AttributeName=product_id,KeyType=HASH \
-              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-              --region eu-north-1
-          else
-            echo "Products table already exists."
-          fi
+          aws dynamodb create-table \
+            --table-name products \
+            --attribute-definitions AttributeName=product_id,AttributeType=S \
+            --key-schema AttributeName=product_id,KeyType=HASH \
+            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+            --region eu-north-1 || echo "Products table already exists"
 
       - name: Create DynamoDB Table for Cart Service
         run: |
-          if ! aws dynamodb describe-table --table-name carts --region eu-north-1 > /dev/null 2>&1; then
-            aws dynamodb create-table \
-              --table-name carts \
-              --attribute-definitions AttributeName=cart_id,AttributeType=S \
-              --key-schema AttributeName=cart_id,KeyType=HASH \
-              --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-              --region eu-north-1
-          else
-            echo "Carts table already exists."
-          fi
+          aws dynamodb create-table \
+            --table-name carts \
+            --attribute-definitions AttributeName=user_id,AttributeType=S \
+            --key-schema AttributeName=user_id,KeyType=HASH \
+            --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
+            --region eu-north-1 || echo "Carts table already exists"
 
-      # Step 6: Check and Create S3 Bucket for Product Service
+      # Create S3 Bucket for Product Service
       - name: Create S3 Bucket for Product Service
         run: |
-          if ! aws s3 ls "s3://microcart-products" --region eu-north-1 > /dev/null 2>&1; then
-            aws s3 mb s3://microcart-products --region eu-north-1
-          else
-            echo "S3 bucket for products already exists."
-          fi
+          aws s3 mb s3://microcart-products --region eu-north-1 || echo "S3 bucket already exists"
 
-      # Step 7: Deploy Services with Copilot (no need to specify environment, it uses default)
+      # Deploy Services with Copilot
       - name: Deploy Services with Copilot
         run: |
           copilot svc deploy --name user-service --env production
           copilot svc deploy --name product-service --env production
           copilot svc deploy --name cart-service --env production
 
-      # Step 8: Output Deployment URLs
+      # Output Deployment URLs
       - name: Output Deployment URLs
         run: |
           echo "User Service URL: https://$(copilot svc show --name user-service --env production | grep 'URL' | awk '{print $2}')"
           echo "Product Service URL: https://$(copilot svc show --name product-service --env production | grep 'URL' | awk '{print $2}')"
           echo "Cart Service URL: https://$(copilot svc show --name cart-service --env production | grep 'URL' | awk '{print $2}')"
           
-      # Step 9: Confirm successful deployment
+      # Confirm successful deployment
       - name: Deployment Complete
         run: echo "Deployment to AWS completed successfully!"
