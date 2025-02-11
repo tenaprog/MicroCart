@@ -197,35 +197,48 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://cart-service-task.json
 
-      # Create ECS Services using secrets for subnets and security groups
-      - name: Create ECS Services
+      # Create ECS Services if they do not exist or update them if they exist
+      - name: Create or Update ECS Services
         run: |
-          echo "Creating ECS services for User, Product, and Cart..."
-          aws ecs create-service \
-            --cluster microcart-cluster \
-            --service-name user-service \
-            --task-definition user-service-task \
-            --desired-count 1 \
-            --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
+          echo "Creating or updating ECS services for User, Product, and Cart..."
+          
+          # Function to create or update ECS service
+          create_or_update_service() {
+            SERVICE_NAME=$1
+            TASK_DEFINITION=$2
+            CLUSTER_NAME=$3
+            SUBNETS=$4
+            SECURITY_GROUPS=$5
 
-          aws ecs create-service \
-            --cluster microcart-cluster \
-            --service-name product-service \
-            --task-definition product-service-task \
-            --desired-count 1 \
-            --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
+            # Check if service exists
+            SERVICE_EXISTS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].serviceName' --output text)
+            
+            if [ "$SERVICE_EXISTS" == "$SERVICE_NAME" ]; then
+              echo "$SERVICE_NAME exists. Updating the service..."
+              aws ecs update-service \
+                --cluster $CLUSTER_NAME \
+                --service $SERVICE_NAME \
+                --task-definition $TASK_DEFINITION \
+                --desired-count 1 \
+                --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}"
+            else
+              echo "$SERVICE_NAME does not exist. Creating the service..."
+              aws ecs create-service \
+                --cluster $CLUSTER_NAME \
+                --service-name $SERVICE_NAME \
+                --task-definition $TASK_DEFINITION \
+                --desired-count 1 \
+                --launch-type FARGATE \
+                --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=ENABLED}"
+            fi
+          }
 
-          aws ecs create-service \
-            --cluster microcart-cluster \
-            --service-name cart-service \
-            --task-definition cart-service-task \
-            --desired-count 1 \
-            --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
-
-      # Output ECS Service URL
+          # Create or update each service
+          create_or_update_service "user-service" "user-service-task" "microcart-cluster" "${{ secrets.AWS_SUBNETS }}" "${{ secrets.AWS_SECURITY_GROUPS }}"
+          create_or_update_service "product-service" "product-service-task" "microcart-cluster" "${{ secrets.AWS_SUBNETS }}" "${{ secrets.AWS_SECURITY_GROUPS }}"
+          create_or_update_service "cart-service" "cart-service-task" "microcart-cluster" "${{ secrets.AWS_SUBNETS }}" "${{ secrets.AWS_SECURITY_GROUPS }}"
+     
+          # Output ECS Service URL
       - name: Output ECS service URLs
         run: |
           echo "User Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services user-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
