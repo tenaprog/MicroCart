@@ -32,17 +32,25 @@ jobs:
       # Log in to Amazon ECR
       - name: Log in to Amazon ECR
         run: |
+          echo "Logging into Amazon ECR..."
           aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
+          
+          # Check if the login was successful
+          if [ $? -ne 0 ]; then
+            echo "ECR login failed. Please verify your AWS credentials and region."
+            exit 1
+          fi
 
       # Build and push Docker images to ECR
       - name: Build and push Docker images to ECR
         run: |
+          echo "Building and pushing Docker images..."
           # Create ECR repository if it doesn't exist
           aws ecr describe-repositories --repository-name user-service || aws ecr create-repository --repository-name user-service
           aws ecr describe-repositories --repository-name product-service || aws ecr create-repository --repository-name product-service
           aws ecr describe-repositories --repository-name cart-service || aws ecr create-repository --repository-name cart-service
 
-          # Build Docker images and push them
+          # Build and push Docker images for each service
           docker build -t user-service ./user_service
           docker tag user-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/user-service:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/user-service:latest
@@ -58,6 +66,7 @@ jobs:
       # Create DynamoDB Tables (User, Product, and Cart)
       - name: Create DynamoDB Tables
         run: |
+          echo "Creating DynamoDB tables..."
           aws dynamodb create-table \
             --table-name users \
             --attribute-definitions AttributeName=user_id,AttributeType=S \
@@ -74,24 +83,28 @@ jobs:
           
           aws dynamodb create-table \
             --table-name carts \
-            --attribute-definitions AttributeName=cart_id,AttributeType=S \
-            --key-schema AttributeName=cart_id,KeyType=HASH \
+            --attribute-definitions AttributeName=user_id,AttributeType=S \
+            --key-schema AttributeName=user_id,KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
             --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "Carts table already exists"
 
       # Create S3 Bucket for Product Service (for file storage)
       - name: Create S3 Bucket for Product Service
         run: |
+          echo "Creating S3 bucket for product service..."
           aws s3 mb s3://microcart-products --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "S3 bucket already exists"
 
       # Create ECS Cluster if it doesn't exist
       - name: Create ECS Cluster
         run: |
+          echo "Creating ECS cluster if it doesn't exist..."
           aws ecs describe-clusters --clusters microcart-cluster || aws ecs create-cluster --cluster-name microcart-cluster
 
-      # Create ECS Task Definitions for User, Product, and Cart Services
+      # Register ECS Task Definitions
       - name: Register ECS Task Definitions
         run: |
+          echo "Registering ECS Task Definition for user service.."
+          # ECS Task Definition JSON for each service
           cat > user-service-task.json <<EOF
           {
             "family": "user-service-task",
@@ -118,6 +131,8 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://user-service-task.json
 
+          echo "Registering ECS Task Definition for product service.."
+          # ECS Task Definition JSON for each service
           cat > product-service-task.json <<EOF
           {
             "family": "product-service-task",
@@ -144,6 +159,8 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://product-service-task.json
 
+          echo "Registering ECS Task Definition for cart service.."
+          # ECS Task Definition JSON for each service
           cat > cart-service-task.json <<EOF
           {
             "family": "cart-service-task",
@@ -170,24 +187,26 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://cart-service-task.json
 
-      # Create ECS Services (User, Product, Cart)
+      # Create ECS Services using secrets for subnets and security groups
       - name: Create ECS Services
         run: |
+          echo "Creating ECS services for User, Product, and Cart..."
           aws ecs create-service \
             --cluster microcart-cluster \
             --service-name user-service \
             --task-definition user-service-task \
             --desired-count 1 \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxx],securityGroups=[sg-xxxxxx],assignPublicIp=ENABLED}"
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
 
+          # Repeat for product-service and cart-service
           aws ecs create-service \
             --cluster microcart-cluster \
             --service-name product-service \
             --task-definition product-service-task \
             --desired-count 1 \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxx],securityGroups=[sg-xxxxxx],assignPublicIp=ENABLED}"
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
 
           aws ecs create-service \
             --cluster microcart-cluster \
@@ -195,10 +214,11 @@ jobs:
             --task-definition cart-service-task \
             --desired-count 1 \
             --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxx],securityGroups=[sg-xxxxxx],assignPublicIp=ENABLED}"
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
 
       # Output ECS Service URL
       - name: Output ECS service URLs
         run: |
           echo "User Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services user-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
-          echo "Product Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services product-service --
+          echo "Product Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services product-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
+          echo "Cart Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services cart-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
