@@ -103,6 +103,9 @@ jobs:
       # Register ECS Task Definitions
       - name: Register ECS Task Definitions
         run: |
+          echo "Deregistering existing ECS Task Definition for user service.."
+          aws ecs deregister-task-definition --task-definition user-service-task || echo "No previous task definition for user service found"
+          
           echo "Registering ECS Task Definition for user service.."
           # ECS Task Definition JSON for each service
           cat > user-service-task.json <<EOF
@@ -131,6 +134,9 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://user-service-task.json
 
+          echo "Deregistering existing ECS Task Definition for product service.."
+          aws ecs deregister-task-definition --task-definition product-service-task || echo "No previous task definition for product service found"
+          
           echo "Registering ECS Task Definition for product service.."
           # ECS Task Definition JSON for each service
           cat > product-service-task.json <<EOF
@@ -159,6 +165,9 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://product-service-task.json
 
+          echo "Deregistering existing ECS Task Definition for cart service.."
+          aws ecs deregister-task-definition --task-definition cart-service-task || echo "No previous task definition for cart service found"
+          
           echo "Registering ECS Task Definition for cart service.."
           # ECS Task Definition JSON for each service
           cat > cart-service-task.json <<EOF
@@ -186,7 +195,7 @@ jobs:
           }
           EOF
           aws ecs register-task-definition --cli-input-json file://cart-service-task.json
-
+    
       # Create ECS Services using secrets for subnets and security groups
       - name: Create ECS Services
         run: |
