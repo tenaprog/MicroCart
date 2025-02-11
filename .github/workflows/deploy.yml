@@ -35,6 +35,7 @@ jobs:
           echo "PATH is: $PATH"
           which copilot
           copilot --version
+        shell: bash
 
       # Step 4: Initialize Copilot Application if not already initialized
       - name: Initialize Copilot Application
