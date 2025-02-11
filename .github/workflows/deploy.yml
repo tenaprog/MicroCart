@@ -51,15 +51,15 @@ jobs:
           aws ecr describe-repositories --repository-name cart-service || aws ecr create-repository --repository-name cart-service
 
           # Build and push Docker images for each service
-          docker build -t user-service ./user_service  # Make sure the path here is correct for user-service
+          docker build -t user-service ./user_service 
           docker tag user-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/user-service:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/user-service:latest
 
-          docker build -t product-service ./product_service  # Adjust if necessary for product-service
+          docker build -t product-service ./product_service
           docker tag product-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/product-service:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/product-service:latest
 
-          docker build -t cart-service ./cart_service  # Make sure this is correct for cart-service
+          docker build -t cart-service ./cart_service
           docker tag cart-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/cart-service:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/cart-service:latest
 
