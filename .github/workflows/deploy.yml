@@ -24,14 +24,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-north-1
 
-      # Install Copilot CLI with Retry Logic
+      # Install Copilot CLI with Retry Logic and Correct Permissions
       - name: Install Copilot CLI
         run: |
           attempt=0
           max_attempts=3
           success=false
           while [ $attempt -lt $max_attempts ]; do
-            curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux && chmod +x copilot && mv copilot /usr/local/bin/copilot && success=true && break
+            curl -Lo copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux
+            chmod +x copilot
+            sudo mv copilot /usr/local/bin/copilot && success=true && break
             attempt=$((attempt + 1))
             echo "Attempt $attempt failed. Retrying in 5 seconds..."
             sleep 5
@@ -43,7 +45,8 @@ jobs:
 
       # Verify Copilot CLI Installation
       - name: Verify Copilot CLI Installation
-        run: copilot --version
+        run: |
+          copilot --version
 
       # Initialize Copilot Application if not already initialized
       - name: Initialize Copilot Application
@@ -88,8 +91,8 @@ jobs:
         run: |
           aws dynamodb create-table \
             --table-name carts \
-            --attribute-definitions AttributeName=user_id,AttributeType=S \
-            --key-schema AttributeName=user_id,KeyType=HASH \
+            --attribute-definitions AttributeName=cart_id,AttributeType=S \
+            --key-schema AttributeName=cart_id,KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
             --region eu-north-1 || echo "Carts table already exists"
 
