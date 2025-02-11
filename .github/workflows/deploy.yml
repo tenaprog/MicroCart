@@ -1,0 +1,64 @@
+name: Deploy to AWS ECS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AWS_REGION: eu-north-1
+  ECR_REPOSITORY_CART: 448049790780.dkr.ecr.eu-north-1.amazonaws.com/cart-service
+  ECR_REPOSITORY_PRODUCT: 448049790780.dkr.ecr.eu-north-1.amazonaws.com/product-service
+  ECR_REPOSITORY_USER: 448049790780.dkr.ecr.eu-north-1.amazonaws.com/user-service
+  ECS_CLUSTER: microcart-cluster
+  ECS_SERVICE_CART: cart-service
+  ECS_SERVICE_PRODUCT: product-service
+  ECS_SERVICE_USER: user-service
+
+jobs:
+  deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_CART
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_PRODUCT
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_USER
+
+      - name: Build, tag, and push Docker images
+        run: |
+          # Cart Service
+          docker build -t cart-service ./cart_service
+          docker tag cart-service:latest $ECR_REPOSITORY_CART:latest
+          docker push $ECR_REPOSITORY_CART:latest
+          
+          # Product Service
+          docker build -t product-service ./product_service
+          docker tag product-service:latest $ECR_REPOSITORY_PRODUCT:latest
+          docker push $ECR_REPOSITORY_PRODUCT:latest
+
+          # User Service
+          docker build -t user-service ./user_service
+          docker tag user-service:latest $ECR_REPOSITORY_USER:latest
+          docker push $ECR_REPOSITORY_USER:latest
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_CART --force-new-deployment
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_PRODUCT --force-new-deployment
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE_USER --force-new-deployment
