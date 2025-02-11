@@ -19,3 +19,12 @@ http://13.48.31.12:8002/docs#/
 http://13.48.31.12:8003/docs#/
 
 ![CART SERVICE API](api_cart.png)
+
+## example to test
+
+### register user
+![token](token_example_register.png)
+
+### login and use token for other endpoints
+![token](token_example_login.png)
+
