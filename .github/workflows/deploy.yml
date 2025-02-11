@@ -100,14 +100,42 @@ jobs:
           echo "Creating ECS cluster if it doesn't exist..."
           aws ecs describe-clusters --clusters microcart-cluster || aws ecs create-cluster --cluster-name microcart-cluster
 
+      # Create VPC, Subnets, and Security Groups (if not exist)
+      - name: Create VPC, Subnets, and Security Groups
+        run: |
+          echo "Creating VPC, subnets, and security groups..."
+
+          # Create VPC if it doesn't exist
+          VPC_ID=$(aws ec2 describe-vpcs --query "Vpcs[?IsDefault==\`false\`].VpcId" --output text)
+          if [ -z "$VPC_ID" ]; then
+            echo "Creating VPC..."
+            VPC_ID=$(aws ec2 create-vpc --cidr-block "10.0.0.0/16" --query "Vpc.VpcId" --output text)
+          fi
+
+          # Create Subnets (Public Subnet)
+          PUBLIC_SUBNET_ID=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block "10.0.1.0/24" --availability-zone ${AWS_DEFAULT_REGION}a --query "Subnet.SubnetId" --output text)
+          PRIVATE_SUBNET_ID=$(aws ec2 create-subnet --vpc-id $VPC_ID --cidr-block "10.0.2.0/24" --availability-zone ${AWS_DEFAULT_REGION}a --query "Subnet.SubnetId" --output text)
+
+          # Create Security Group
+          SECURITY_GROUP_ID=$(aws ec2 create-security-group --group-name microcart-sg --description "Security group for ECS services" --vpc-id $VPC_ID --query "GroupId" --output text)
+
+          # Set inbound rules for security group
+          aws ec2 authorize-security-group-ingress --region ${{ secrets.AWS_DEFAULT_REGION }} --group-id $SECURITY_GROUP_ID --protocol tcp --port 80 --cidr 0.0.0.0/0
+
+          # Output VPC, Subnet and Security Group IDs
+          echo "VPC ID: $VPC_ID"
+          echo "Public Subnet ID: $PUBLIC_SUBNET_ID"
+          echo "Private Subnet ID: $PRIVATE_SUBNET_ID"
+          echo "Security Group ID: $SECURITY_GROUP_ID"
+
+          # Save subnet and security group IDs as secrets for later use
+          echo "AWS_SUBNETS=$PUBLIC_SUBNET_ID,$PRIVATE_SUBNET_ID" >> $GITHUB_ENV
+          echo "AWS_SECURITY_GROUPS=$SECURITY_GROUP_ID" >> $GITHUB_ENV
+
       # Register ECS Task Definitions
       - name: Register ECS Task Definitions
         run: |
-          echo "Deregistering existing ECS Task Definition for user service.."
-          aws ecs deregister-task-definition --task-definition user-service-task || echo "No previous task definition for user service found"
-          
           echo "Registering ECS Task Definition for user service.."
-          # ECS Task Definition JSON for each service
           cat > user-service-task.json <<EOF
           {
             "family": "user-service-task",
@@ -134,11 +162,7 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://user-service-task.json
 
-          echo "Deregistering existing ECS Task Definition for product service.."
-          aws ecs deregister-task-definition --task-definition product-service-task || echo "No previous task definition for product service found"
-          
           echo "Registering ECS Task Definition for product service.."
-          # ECS Task Definition JSON for each service
           cat > product-service-task.json <<EOF
           {
             "family": "product-service-task",
@@ -165,11 +189,7 @@ jobs:
           EOF
           aws ecs register-task-definition --cli-input-json file://product-service-task.json
 
-          echo "Deregistering existing ECS Task Definition for cart service.."
-          aws ecs deregister-task-definition --task-definition cart-service-task || echo "No previous task definition for cart service found"
-          
           echo "Registering ECS Task Definition for cart service.."
-          # ECS Task Definition JSON for each service
           cat > cart-service-task.json <<EOF
           {
             "family": "cart-service-task",
@@ -195,7 +215,7 @@ jobs:
           }
           EOF
           aws ecs register-task-definition --cli-input-json file://cart-service-task.json
-    
+
       # Create ECS Services using secrets for subnets and security groups
       - name: Create ECS Services
         run: |
@@ -208,7 +228,6 @@ jobs:
             --launch-type FARGATE \
             --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.AWS_SUBNETS }}],securityGroups=[${{ secrets.AWS_SECURITY_GROUPS }}],assignPublicIp=ENABLED}"
 
-          # Repeat for product-service and cart-service
           aws ecs create-service \
             --cluster microcart-cluster \
             --service-name product-service \
