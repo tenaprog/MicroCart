@@ -1,4 +1,4 @@
-name: Deploy to AWS
+name: Deploy to AWS ECS (Fargate) with DynamoDB and S3
 
 on:
   push:
@@ -11,103 +11,194 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      # Step 1: Checkout the repository
+      # Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Step 2: Set up AWS CLI using GitHub Secrets
+      # Set up AWS CLI with your credentials
       - name: Set up AWS CLI
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-north-1
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
 
-      # Step 3: Install Copilot CLI into ~/bin and export it into PATH
-      - name: Install Copilot CLI
+      # Set up Docker Buildx (needed for multi-architecture builds)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      # Log in to Amazon ECR
+      - name: Log in to Amazon ECR
         run: |
-          mkdir -p ~/bin
-          curl -Lo ~/bin/copilot https://github.com/aws/copilot-cli/releases/download/v1.23.0/copilot-linux
-          chmod +x ~/bin/copilot
-          # Export ~/bin into PATH for this step (and subsequent steps in this job)
-          export PATH="$HOME/bin:$PATH"
-          echo "PATH is: $PATH"
-          which copilot
-          copilot --version
-        shell: bash
+          aws ecr get-login-password --region ${{ secrets.AWS_DEFAULT_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com
 
-      # Step 4: Initialize Copilot Application if not already initialized
-      - name: Initialize Copilot Application
+      # Build and push Docker images to ECR
+      - name: Build and push Docker images to ECR
         run: |
-          export PATH="$HOME/bin:$PATH"
-          if ! copilot app ls | grep -q "microcart-app"; then
-            echo "Initializing Copilot application..."
-            copilot app init --name microcart-app || exit 1
-          else
-            echo "Copilot application 'microcart-app' already initialized."
-          fi
+          # Create ECR repository if it doesn't exist
+          aws ecr describe-repositories --repository-name user-service || aws ecr create-repository --repository-name user-service
+          aws ecr describe-repositories --repository-name product-service || aws ecr create-repository --repository-name product-service
+          aws ecr describe-repositories --repository-name cart-service || aws ecr create-repository --repository-name cart-service
 
-      # Step 5: Check and Create Environment if not exists
-      - name: Check and Create Environment
-        run: |
-          export PATH="$HOME/bin:$PATH"
-          if ! copilot env ls --app microcart-app | grep -q "production"; then
-            echo "Production environment not found. Creating production environment..."
-            copilot env init --name production --app microcart-app --profile default || exit 1
-          else
-            echo "Production environment already exists."
-          fi
+          # Build Docker images and push them
+          docker build -t user-service ./user_service
+          docker tag user-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/user-service:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/user-service:latest
 
-      # Step 6: Create DynamoDB Tables for All Services
-      - name: Create DynamoDB Table for User Service
+          docker build -t product-service ./product_service
+          docker tag product-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/product-service:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/product-service:latest
+
+          docker build -t cart-service ./cart_service
+          docker tag cart-service:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/cart-service:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/cart-service:latest
+
+      # Create DynamoDB Tables (User, Product, and Cart)
+      - name: Create DynamoDB Tables
         run: |
           aws dynamodb create-table \
             --table-name users \
             --attribute-definitions AttributeName=user_id,AttributeType=S \
             --key-schema AttributeName=user_id,KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-            --region eu-north-1 || echo "Users table already exists"
-
-      - name: Create DynamoDB Table for Product Service
-        run: |
+            --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "Users table already exists"
+          
           aws dynamodb create-table \
             --table-name products \
             --attribute-definitions AttributeName=product_id,AttributeType=S \
             --key-schema AttributeName=product_id,KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-            --region eu-north-1 || echo "Products table already exists"
-
-      - name: Create DynamoDB Table for Cart Service
-        run: |
+            --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "Products table already exists"
+          
           aws dynamodb create-table \
             --table-name carts \
             --attribute-definitions AttributeName=cart_id,AttributeType=S \
             --key-schema AttributeName=cart_id,KeyType=HASH \
             --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5 \
-            --region eu-north-1 || echo "Carts table already exists"
+            --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "Carts table already exists"
 
-      # Step 7: Create S3 Bucket for Product Service
+      # Create S3 Bucket for Product Service (for file storage)
       - name: Create S3 Bucket for Product Service
         run: |
-          aws s3 mb s3://microcart-products --region eu-north-1 || echo "S3 bucket already exists"
+          aws s3 mb s3://microcart-products --region ${{ secrets.AWS_DEFAULT_REGION }} || echo "S3 bucket already exists"
 
-      # Step 8: Deploy Services with Copilot
-      - name: Deploy Services with Copilot
+      # Create ECS Cluster if it doesn't exist
+      - name: Create ECS Cluster
         run: |
-          export PATH="$HOME/bin:$PATH"
-          copilot svc deploy --name user-service --env production
-          copilot svc deploy --name product-service --env production
-          copilot svc deploy --name cart-service --env production
+          aws ecs describe-clusters --clusters microcart-cluster || aws ecs create-cluster --cluster-name microcart-cluster
 
-      # Step 9: Output Deployment URLs
-      - name: Output Deployment URLs
+      # Create ECS Task Definitions for User, Product, and Cart Services
+      - name: Register ECS Task Definitions
         run: |
-          export PATH="$HOME/bin:$PATH"
-          echo "User Service URL: https://$(copilot svc show --name user-service --env production | grep 'URL' | awk '{print $2}')"
-          echo "Product Service URL: https://$(copilot svc show --name product-service --env production | grep 'URL' | awk '{print $2}')"
-          echo "Cart Service URL: https://$(copilot svc show --name cart-service --env production | grep 'URL' | awk '{print $2}')"
-          
-      # Step 10: Confirm successful deployment
-      - name: Deployment Complete
-        run: echo "Deployment to AWS completed successfully!"
+          cat > user-service-task.json <<EOF
+          {
+            "family": "user-service-task",
+            "networkMode": "awsvpc",
+            "containerDefinitions": [
+              {
+                "name": "user-service",
+                "image": "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/user-service:latest",
+                "cpu": 256,
+                "memory": 512,
+                "essential": true,
+                "portMappings": [
+                  {
+                    "containerPort": 80,
+                    "hostPort": 80
+                  }
+                ]
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "256",
+            "memory": "512"
+          }
+          EOF
+          aws ecs register-task-definition --cli-input-json file://user-service-task.json
+
+          cat > product-service-task.json <<EOF
+          {
+            "family": "product-service-task",
+            "networkMode": "awsvpc",
+            "containerDefinitions": [
+              {
+                "name": "product-service",
+                "image": "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/product-service:latest",
+                "cpu": 256,
+                "memory": 512,
+                "essential": true,
+                "portMappings": [
+                  {
+                    "containerPort": 80,
+                    "hostPort": 80
+                  }
+                ]
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "256",
+            "memory": "512"
+          }
+          EOF
+          aws ecs register-task-definition --cli-input-json file://product-service-task.json
+
+          cat > cart-service-task.json <<EOF
+          {
+            "family": "cart-service-task",
+            "networkMode": "awsvpc",
+            "containerDefinitions": [
+              {
+                "name": "cart-service",
+                "image": "${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_DEFAULT_REGION }}.amazonaws.com/cart-service:latest",
+                "cpu": 256,
+                "memory": 512,
+                "essential": true,
+                "portMappings": [
+                  {
+                    "containerPort": 80,
+                    "hostPort": 80
+                  }
+                ]
+              }
+            ],
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "256",
+            "memory": "512"
+          }
+          EOF
+          aws ecs register-task-definition --cli-input-json file://cart-service-task.json
+
+      # Create ECS Services (User, Product, Cart)
+      - name: Create ECS Services
+        run: |
+          aws ecs create-service \
+            --cluster microcart-cluster \
+            --service-name user-service \
+            --task-definition user-service-task \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxx],securityGroups=[sg-xxxxxx],assignPublicIp=ENABLED}"
+
+          aws ecs create-service \
+            --cluster microcart-cluster \
+            --service-name product-service \
+            --task-definition product-service-task \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxx],securityGroups=[sg-xxxxxx],assignPublicIp=ENABLED}"
+
+          aws ecs create-service \
+            --cluster microcart-cluster \
+            --service-name cart-service \
+            --task-definition cart-service-task \
+            --desired-count 1 \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[subnet-xxxxxx],securityGroups=[sg-xxxxxx],assignPublicIp=ENABLED}"
+
+      # Output ECS Service URL
+      - name: Output ECS service URLs
+        run: |
+          echo "User Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services user-service --query 'services[0].loadBalancers[0].dnsName' --output text)"
+          echo "Product Service URL: http://$(aws ecs describe-services --cluster microcart-cluster --services product-service --
